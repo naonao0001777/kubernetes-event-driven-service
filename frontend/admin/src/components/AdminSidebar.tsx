@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 
 interface NavigationItem {
   id: string;
   name: string;
   icon: string;
   description: string;
-  active?: boolean;
+  path: string;
 }
 
 interface AdminSidebarProps {
@@ -15,52 +15,68 @@ interface AdminSidebarProps {
   onItemChange?: (itemId: string) => void;
 }
 
-export function AdminSidebar({ activeItem = 'dashboard', onItemChange }: AdminSidebarProps) {
-  const [currentActive, setCurrentActive] = useState(activeItem);
+export function AdminSidebar({ activeItem, onItemChange }: AdminSidebarProps) {
+  const router = useRouter();
+  const pathname = usePathname();
 
   const navigationItems: NavigationItem[] = [
     {
       id: 'dashboard',
       name: 'ダッシュボード',
       icon: '📊',
-      description: '概要と分析'
+      description: '概要と分析',
+      path: '/'
     },
     {
       id: 'inventory',
       name: '在庫管理',
       icon: '📦',
-      description: '在庫レベルの管理'
+      description: '在庫レベルの管理',
+      path: '/inventory'
     },
     {
       id: 'products',
       name: '商品管理',
       icon: '🏷️',
-      description: '商品カタログの管理'
+      description: '商品カタログの管理',
+      path: '/products'
     },
     {
       id: 'orders',
       name: '注文管理',
       icon: '📋',
-      description: '注文の閲覧と管理'
+      description: '注文の閲覧と管理',
+      path: '/orders'
     },
     {
       id: 'analytics',
       name: '分析レポート',
       icon: '📈',
-      description: '売上とパフォーマンスデータ'
+      description: '売上とパフォーマンスデータ',
+      path: '/analytics'
     },
     {
       id: 'system',
       name: 'システム監視',
       icon: '🖥️',
-      description: 'システムの状態とログ'
+      description: 'システムの状態とログ',
+      path: '/system'
     }
   ];
 
-  const handleItemClick = (itemId: string) => {
-    setCurrentActive(itemId);
-    onItemChange?.(itemId);
+  const handleItemClick = (item: NavigationItem) => {
+    router.push(item.path);
+    onItemChange?.(item.id);
   };
+
+  const getCurrentActive = () => {
+    if (activeItem) return activeItem;
+    
+    const currentItem = navigationItems.find(item => item.path === pathname);
+    return currentItem?.id || 'dashboard';
+  };
+
+  const currentActive = getCurrentActive();
 
   return (
     <div className="admin-sidebar h-full">
@@ -81,7 +97,7 @@ export function AdminSidebar({ activeItem = 'dashboard', onItemChange }: AdminSi
           {navigationItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => handleItemClick(item.id)}
+              onClick={() => handleItemClick(item)}
               className={`
                 admin-sidebar-item w-full text-left
                 ${currentActive === item.id ? 'active bg-admin-50 text-admin-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}
