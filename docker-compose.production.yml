@@ -1,0 +1,486 @@
+# Production-Ready Docker Compose Configuration
+version: '3.8'
+
+# Docker Compose Networks
+networks:
+  production-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Shared Volumes  
+volumes:
+  kafka-data:
+    driver: local
+  zookeeper-data:
+    driver: local
+  postgres-data:
+    driver: local
+
+services:
+  # Infrastructure Services
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: production-zookeeper
+    restart: unless-stopped
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_INIT_LIMIT: 5
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-data:/var/lib/zookeeper/log
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: production-kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,OUTSIDE://localhost:9094
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:9094
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Database for production services
+  postgres:
+    image: postgres:15-alpine
+    container_name: production-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ecommerce_production
+      POSTGRES_USER: ecommerce_admin
+      POSTGRES_PASSWORD: secure_production_password_2025
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ecommerce_admin -d ecommerce_production"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Backend Microservices
+  order-service:
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    container_name: production-order-service
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKER=kafka:9092
+      - DATABASE_URL=postgresql://ecommerce_admin:secure_production_password_2025@postgres:5432/ecommerce_production
+      - SERVICE_NAME=order-service
+      - SERVICE_VERSION=1.0.0
+      - LOG_LEVEL=info
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  inventory-service:
+    build:
+      context: ./services/inventory-service
+      dockerfile: Dockerfile
+    container_name: production-inventory-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKER=kafka:9092
+      - DATABASE_URL=postgresql://ecommerce_admin:secure_production_password_2025@postgres:5432/ecommerce_production
+      - SERVICE_NAME=inventory-service
+      - SERVICE_VERSION=1.0.0
+      - LOG_LEVEL=info
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  product-service:
+    build:
+      context: ./services/product-service
+      dockerfile: Dockerfile
+    container_name: production-product-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKER=kafka:9092
+      - DATABASE_URL=postgresql://ecommerce_admin:secure_production_password_2025@postgres:5432/ecommerce_production
+      - SERVICE_NAME=product-service
+      - SERVICE_VERSION=1.0.0
+      - LOG_LEVEL=info
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  management-service:
+    build:
+      context: ./services/management-service
+      dockerfile: Dockerfile
+    container_name: production-management-service
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKER=kafka:9092
+      - DATABASE_URL=postgresql://ecommerce_admin:secure_production_password_2025@postgres:5432/ecommerce_production
+      - SERVICE_NAME=management-service
+      - SERVICE_VERSION=1.0.0
+      - LOG_LEVEL=info
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  payment-service:
+    build:
+      context: ./services/payment-service
+      dockerfile: Dockerfile
+    container_name: production-payment-service
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKER=kafka:9092
+      - DATABASE_URL=postgresql://ecommerce_admin:secure_production_password_2025@postgres:5432/ecommerce_production
+      - SERVICE_NAME=payment-service
+      - SERVICE_VERSION=1.0.0
+      - LOG_LEVEL=info
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: production-notification-service
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKER=kafka:9092
+      - SERVICE_NAME=notification-service
+      - SERVICE_VERSION=1.0.0
+      - LOG_LEVEL=info
+      - EMAIL_SERVICE_URL=smtp://production-email-service:587
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8085/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.3'
+
+  shipping-service:
+    build:
+      context: ./services/shipping-service
+      dockerfile: Dockerfile
+    container_name: production-shipping-service
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKER=kafka:9092
+      - DATABASE_URL=postgresql://ecommerce_admin:secure_production_password_2025@postgres:5432/ecommerce_production
+      - SERVICE_NAME=shipping-service
+      - SERVICE_VERSION=1.0.0
+      - LOG_LEVEL=info
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8086/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  status-service:
+    build:
+      context: ./services/status-service
+      dockerfile: Dockerfile
+    container_name: production-status-service
+    restart: unless-stopped
+    ports:
+      - "8087:8087"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKER=kafka:9092
+      - DATABASE_URL=postgresql://ecommerce_admin:secure_production_password_2025@postgres:5432/ecommerce_production
+      - SERVICE_NAME=status-service
+      - SERVICE_VERSION=1.0.0
+      - LOG_LEVEL=info
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8087/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  # Frontend Services  
+  customer-frontend:
+    build:
+      context: ./frontend/customer
+      dockerfile: Dockerfile
+    container_name: production-customer-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      order-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      status-service:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+      - NEXT_PUBLIC_PRODUCT_API_URL=http://localhost:8082
+      - NEXT_PUBLIC_STATUS_API_URL=http://localhost:8087
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+
+  admin-frontend:
+    build:
+      context: ./frontend/admin
+      dockerfile: Dockerfile
+    container_name: production-admin-frontend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    depends_on:
+      inventory-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      management-service:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+      - NEXT_PUBLIC_INVENTORY_API_URL=http://localhost:8081
+      - NEXT_PUBLIC_PRODUCT_API_URL=http://localhost:8082
+      - NEXT_PUBLIC_MANAGEMENT_API_URL=http://localhost:8083
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+
+  # Monitoring and Observability
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: production-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - production-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: production-grafana
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=production_admin_2025
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./monitoring/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+    networks:
+      - production-network
+
+  # Load Balancer / Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: production-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - customer-frontend
+      - admin-frontend
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
