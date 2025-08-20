@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: status-service
+  namespace: default
+  labels:
+    app: status-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: status-service
+  template:
+    metadata:
+      labels:
+        app: status-service
+    spec:
+      containers:
+      - name: status-service
+        image: status-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8085
+        env:
+        - name: KAFKA_BROKER
+          value: "my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092"
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8085
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8085
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: status-service
+  namespace: default
+spec:
+  selector:
+    app: status-service
+  ports:
+  - port: 8085
+    targetPort: 8085
+    protocol: TCP
+  type: NodePort
+  # NodePort for external access to WebSocket and REST API
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: status-service-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/websocket-services: "status-service"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  rules:
+  - host: status.localhost
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: status-service
+            port:
+              number: 8085

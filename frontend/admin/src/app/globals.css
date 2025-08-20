@@ -1,0 +1,234 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Admin Portal specific styles */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --foreground-rgb: 15, 23, 42;
+  --background-start-rgb: 248, 250, 252;
+  --background-end-rgb: 248, 250, 252;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Admin-specific animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out;
+}
+
+/* Custom admin button styles */
+.btn-admin-primary {
+  @apply bg-admin-600 text-white px-4 py-2 rounded-md hover:bg-admin-700 focus:outline-none focus:ring-2 focus:ring-admin-500 focus:ring-offset-2 transition-colors duration-200 font-medium;
+}
+
+.btn-admin-secondary {
+  @apply bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200 font-medium;
+}
+
+.btn-admin-danger {
+  @apply bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 font-medium;
+}
+
+/* Admin card styles */
+.admin-card {
+  @apply bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200;
+}
+
+.admin-card-header {
+  @apply border-b border-gray-200 px-6 py-4;
+}
+
+.admin-card-body {
+  @apply p-6;
+}
+
+/* Dashboard specific styles */
+.dashboard-metric {
+  @apply bg-white rounded-lg border border-gray-200 p-6 text-center;
+}
+
+.dashboard-metric-value {
+  @apply text-3xl font-bold text-gray-900;
+}
+
+.dashboard-metric-label {
+  @apply text-sm text-gray-600 mt-1;
+}
+
+/* Table styles */
+.admin-table {
+  @apply min-w-full divide-y divide-gray-200;
+}
+
+.admin-table-header {
+  @apply bg-gray-50;
+}
+
+.admin-table-header th {
+  @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+}
+
+.admin-table-body {
+  @apply bg-white divide-y divide-gray-200;
+}
+
+.admin-table-row {
+  @apply hover:bg-gray-50 transition-colors duration-150;
+}
+
+.admin-table-cell {
+  @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
+}
+
+/* Form styles */
+.admin-form-group {
+  @apply mb-6;
+}
+
+.admin-form-label {
+  @apply block text-sm font-medium text-gray-700 mb-2;
+}
+
+.admin-form-input {
+  @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-admin-500 focus:border-admin-500;
+}
+
+.admin-form-textarea {
+  @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-admin-500 focus:border-admin-500;
+  resize: vertical;
+}
+
+.admin-form-select {
+  @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-admin-500 focus:border-admin-500;
+}
+
+/* Status indicators for admin */
+.status-indicator {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.status-active {
+  @apply bg-green-100 text-green-800;
+}
+
+.status-inactive {
+  @apply bg-gray-100 text-gray-800;
+}
+
+.status-low-stock {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.status-out-of-stock {
+  @apply bg-red-100 text-red-800;
+}
+
+/* Navigation styles */
+.admin-sidebar {
+  @apply bg-white border-r border-gray-200 pt-5 pb-4 overflow-y-auto;
+}
+
+.admin-sidebar-nav {
+  @apply mt-5 flex-grow flex flex-col;
+}
+
+.admin-sidebar-item {
+  @apply text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors duration-150;
+}
+
+.admin-sidebar-item.active {
+  @apply bg-admin-50 text-admin-700 border-r-2 border-admin-500;
+}
+
+/* Alert styles */
+.admin-alert {
+  @apply rounded-md p-4;
+}
+
+.admin-alert-success {
+  @apply bg-green-50 border border-green-200 text-green-800;
+}
+
+.admin-alert-warning {
+  @apply bg-yellow-50 border border-yellow-200 text-yellow-800;
+}
+
+.admin-alert-danger {
+  @apply bg-red-50 border border-red-200 text-red-800;
+}
+
+.admin-alert-info {
+  @apply bg-blue-50 border border-blue-200 text-blue-800;
+}
