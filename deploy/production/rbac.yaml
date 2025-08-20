@@ -1,0 +1,142 @@
+# 本番環境用RBAC設定
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: microservice-sa
+  namespace: production
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: production
+  name: microservice-role
+rules:
+# ConfigMapの読み取り権限
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+# Secretの読み取り権限
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+# Serviceの読み取り権限
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list"]
+# Podの読み取り権限（ヘルスチェック用）
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: microservice-rolebinding
+  namespace: production
+subjects:
+- kind: ServiceAccount
+  name: microservice-sa
+  namespace: production
+roleRef:
+  kind: Role
+  name: microservice-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# 監視用ClusterRole（メトリクス収集用）
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: monitoring-reader
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "nodes/metrics", "services", "endpoints", "pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["extensions", "apps"]
+  resources: ["deployments", "daemonsets", "replicasets"]
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+---
+# 監視用ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: monitoring-sa
+  namespace: production
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: monitoring-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: monitoring-reader
+subjects:
+- kind: ServiceAccount
+  name: monitoring-sa
+  namespace: production
+---
+# PodSecurityPolicy
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: microservice-psp
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  supplementalGroups:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  fsGroup:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  readOnlyRootFilesystem: false
+  seLinux:
+    rule: 'RunAsAny'
+---
+# PodSecurityPolicy用Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: psp-user
+  namespace: production
+rules:
+- apiGroups: ['policy']
+  resources: ['podsecuritypolicies']
+  verbs: ['use']
+  resourceNames:
+  - microservice-psp
+---
+# PodSecurityPolicy用RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: psp-binding
+  namespace: production
+roleRef:
+  kind: Role
+  name: psp-user
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: microservice-sa
+  namespace: production

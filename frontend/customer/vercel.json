@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "name": "ecommerce-customer-portal",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ],
+  "env": {
+    "NEXT_PUBLIC_API_BASE_URL": "@api-base-url",
+    "NEXT_PUBLIC_WS_URL": "@websocket-url"
+  },
+  "regions": ["iad1", "nrt1"],
+  "functions": {
+    "app/api/**/*.js": {
+      "maxDuration": 30
+    }
+  }
+}

@@ -1,0 +1,171 @@
+# 本番環境用ServiceMonitor（Prometheus監視）
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: microservices-monitor
+  namespace: production
+  labels:
+    app: microservices
+spec:
+  selector:
+    matchLabels:
+      monitoring: enabled
+  endpoints:
+  - port: http
+    interval: 30s
+    path: /metrics
+---
+# Order Service用Service（監視用ラベル付き）
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service-monitoring
+  namespace: production
+  labels:
+    monitoring: enabled
+spec:
+  selector:
+    app: order-service
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+---
+# PrometheusRule（アラートルール）
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: microservices-alerts
+  namespace: production
+spec:
+  groups:
+  - name: microservices.rules
+    rules:
+    # Pod再起動アラート
+    - alert: PodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod {{ $labels.pod }} is crash looping"
+        description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is restarting frequently"
+    
+    # CPU使用率アラート
+    - alert: HighCPUUsage
+      expr: (sum(rate(container_cpu_usage_seconds_total[5m])) by (pod) * 100) > 80
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High CPU usage on {{ $labels.pod }}"
+        description: "Pod {{ $labels.pod }} has been using more than 80% CPU for 10 minutes"
+    
+    # メモリ使用率アラート
+    - alert: HighMemoryUsage
+      expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes * 100) > 85
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage on {{ $labels.pod }}"
+        description: "Pod {{ $labels.pod }} is using more than 85% of its memory limit"
+    
+    # Pod利用不可アラート
+    - alert: PodNotReady
+      expr: kube_pod_status_ready{condition="false"} == 1
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod {{ $labels.pod }} not ready"
+        description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not ready for more than 10 minutes"
+    
+    # HTTP応答時間アラート
+    - alert: HighResponseTime
+      expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High response time on {{ $labels.service }}"
+        description: "95th percentile response time is above 2 seconds for {{ $labels.service }}"
+    
+    # Kafka接続エラーアラート
+    - alert: KafkaConnectionError
+      expr: increase(kafka_consumer_connection_close_total[5m]) > 5
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Kafka connection errors detected"
+        description: "High number of Kafka connection closes detected in the last 5 minutes"
+---
+# Grafana Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: microservices-dashboard
+  namespace: production
+data:
+  dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "E-Commerce Microservices",
+        "tags": ["kubernetes", "microservices"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Pod Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "kube_pod_status_ready{namespace=\"production\"}",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(container_cpu_usage_seconds_total{namespace=\"production\"}[5m])",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "container_memory_usage_bytes{namespace=\"production\"}",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "HTTP Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(http_requests_total{namespace=\"production\"}[5m])",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          }
+        ],
+        "time": {"from": "now-1h", "to": "now"},
+        "refresh": "30s"
+      }
+    }

@@ -93,3 +93,26 @@ kill-port-forward: ## Kill all kubectl port-forward processes
 clean: stop-local clean-k8s ## Clean up everything (Docker Compose and Kubernetes)
 	docker-compose down --volumes --remove-orphans
 	docker system prune -f
+
+# Frontend Development
+frontend-customer: ## Start customer frontend in development mode
+	cd frontend/customer && npm install && npm run dev
+
+frontend-admin: ## Start admin frontend in development mode
+	cd frontend/admin && npm install && npm run dev
+
+frontend-build: ## Build both frontend applications
+	cd frontend/customer && npm install && npm run build
+	cd frontend/admin && npm install && npm run build
+
+frontend-test: ## Run tests for both frontend applications
+	cd frontend/customer && npm install && npm run type-check && npm run lint
+	cd frontend/admin && npm install && npm run type-check && npm run lint
+
+# Frontend Docker
+build-frontend: ## Build frontend Docker images
+	docker build -t customer-frontend:latest frontend/customer/
+	docker build -t admin-frontend:latest frontend/admin/
+
+deploy-frontend-k8s: ## Deploy frontend to Kubernetes
+	kubectl apply -f deploy/k8s/frontend/
